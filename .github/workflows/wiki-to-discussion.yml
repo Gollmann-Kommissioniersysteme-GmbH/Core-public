@@ -32,6 +32,15 @@ jobs:
             PAGE_LINKS+="[📄 $PAGE_NAME]($PAGE_URL)\n"
           done
 
+          # Capture diff as text
+          DIFF_TEXT=$(git diff --unified=10 $PREV_COMMIT_SHA $LAST_COMMIT_SHA)
+
+          # Truncate if too long (GitHub has a 65k character limit per discussion)
+          MAX_LENGTH=60000
+          if [[ ${#DIFF_TEXT} -gt $MAX_LENGTH ]]; then
+            DIFF_TEXT="${DIFF_TEXT:0:$MAX_LENGTH}\n\n[⚠️ Diff truncated...]"
+          fi
+
           # Store results for later steps
           echo "DIFF_URL=$DIFF_URL" >> $GITHUB_ENV
 
@@ -45,6 +54,10 @@ jobs:
 
           echo "FILE_CHANGES<<EOF" >> $GITHUB_ENV
           git diff --name-status $PREV_COMMIT_SHA $LAST_COMMIT_SHA >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "DIFF_TEXT<<EOF" >> $GITHUB_ENV
+          echo "$DIFF_TEXT" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create Discussion
@@ -84,7 +97,7 @@ jobs:
             exit 1
           fi
 
-          # ✅ Create Discussion with Wiki Diff Link
+          # ✅ Create Discussion with Inline Diff
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
           DISCUSSION_BODY="📖 **Wiki Page Updated**  
           - **User:** $ACTOR  
@@ -103,7 +116,12 @@ jobs:
           $FILE_CHANGES
           \`\`\`
 
-          🔍 **[View Full Diff]($DIFF_URL)**
+          🔍 **[View Full Diff]($DIFF_URL)**  
+
+          ### 📜 Inline Diff:  
+          \`\`\`diff
+          $DIFF_TEXT
+          \`\`\`
 
           _This discussion was automatically created by GitHub Actions._"
 
