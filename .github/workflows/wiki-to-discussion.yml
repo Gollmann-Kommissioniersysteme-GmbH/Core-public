@@ -23,6 +23,7 @@ jobs:
 
           # Extract exact page URLs
           WIKI_URL="https://github.com/${{ github.repository }}/wiki"
+          DIFF_URL="$WIKI_URL/_compare/$PREV_COMMIT_SHA...$LAST_COMMIT_SHA"
           PAGE_LINKS=""
 
           for FILE in $CHANGED_FILES; do
@@ -32,6 +33,8 @@ jobs:
           done
 
           # Store results for later steps
+          echo "DIFF_URL=$DIFF_URL" >> $GITHUB_ENV
+
           echo "PAGE_LINKS<<EOF" >> $GITHUB_ENV
           echo -e "$PAGE_LINKS" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -81,7 +84,7 @@ jobs:
             exit 1
           fi
 
-          # ✅ Create Discussion with Exact Wiki Page Links
+          # ✅ Create Discussion with Wiki Diff Link
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
           DISCUSSION_BODY="📖 **Wiki Page Updated**  
           - **User:** $ACTOR  
@@ -99,6 +102,8 @@ jobs:
           \`\`\`
           $FILE_CHANGES
           \`\`\`
+
+          🔍 **[View Full Diff]($DIFF_URL)**
 
           _This discussion was automatically created by GitHub Actions._"
 
