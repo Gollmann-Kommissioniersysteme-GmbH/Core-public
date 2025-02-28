@@ -8,12 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Extract Repo Information
-        run: |
-          OWNER="${{ github.repository_owner }}"
-          REPO_NAME="$(basename ${{ github.repository }})"
-          echo "Repository: $OWNER/$REPO_NAME"
-
       - name: Checkout Wiki Repo
         run: |
           git clone --depth=2 https://github.com/${{ github.repository }}.wiki.git wiki
@@ -24,20 +18,30 @@ jobs:
           echo "Last Commit: $LAST_COMMIT_SHA"
           echo "Previous Commit: $PREV_COMMIT_SHA"
 
-          # Generate the changes (diff summary)
-          CHANGES=$(git log -1 --pretty=format:"%s%n%n%b" $LAST_COMMIT_SHA)
-          FILE_CHANGES=$(git diff --name-status $PREV_COMMIT_SHA $LAST_COMMIT_SHA)
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only $PREV_COMMIT_SHA $LAST_COMMIT_SHA)
 
-          echo "Changes: $CHANGES"
-          echo "File Changes: $FILE_CHANGES"
+          # Extract exact page URLs
+          WIKI_URL="https://github.com/${{ github.repository }}/wiki"
+          PAGE_LINKS=""
 
-          # Store changes for later steps
+          for FILE in $CHANGED_FILES; do
+            PAGE_NAME=$(basename "$FILE" .md)   # Remove .md extension
+            PAGE_URL="$WIKI_URL/${PAGE_NAME// /-}"  # Replace spaces with '-'
+            PAGE_LINKS+="[📄 $PAGE_NAME]($PAGE_URL)\n"
+          done
+
+          # Store results for later steps
+          echo "PAGE_LINKS<<EOF" >> $GITHUB_ENV
+          echo -e "$PAGE_LINKS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
           echo "CHANGES<<EOF" >> $GITHUB_ENV
-          echo "$CHANGES" >> $GITHUB_ENV
+          git log -1 --pretty=format:"%s%n%n%b" $LAST_COMMIT_SHA >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
           echo "FILE_CHANGES<<EOF" >> $GITHUB_ENV
-          echo "$FILE_CHANGES" >> $GITHUB_ENV
+          git diff --name-status $PREV_COMMIT_SHA $LAST_COMMIT_SHA >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create Discussion
@@ -47,7 +51,6 @@ jobs:
           OWNER="${{ github.repository_owner }}"
           REPO_NAME="$(basename ${{ github.repository }})"
           ACTOR="${{ github.actor }}"
-          WIKI_URL="https://github.com/$OWNER/$REPO_NAME/wiki"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
           # ✅ Fetch Correct Repository Global ID
@@ -78,12 +81,14 @@ jobs:
             exit 1
           fi
 
-          # ✅ Create Discussion with Wiki Changes
+          # ✅ Create Discussion with Exact Wiki Page Links
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
           DISCUSSION_BODY="📖 **Wiki Page Updated**  
           - **User:** $ACTOR  
           - **Time:** $TIMESTAMP  
-          - **[View Wiki]($WIKI_URL)**  
+
+          ### 🔗 Updated Pages:  
+          $PAGE_LINKS
 
           ### 🔄 Changes:  
           \`\`\`
