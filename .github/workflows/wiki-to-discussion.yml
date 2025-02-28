@@ -19,7 +19,7 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           ACTOR="${{ github.actor }}"
-          WIKI_URL="https://github.com/$REPO/wiki"
+          WIKI_URL="https://github.com/Gollmann-Kommissioniersysteme-GmbH/Core-public/wiki"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
