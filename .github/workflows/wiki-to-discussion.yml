@@ -1,0 +1,52 @@
+name: Wiki Change to Discussion
+
+on:
+  gollum  # This event triggers when the wiki is updated
+
+jobs:
+  post-discussion:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get Repository Information
+        run: |
+          echo "Repo: ${{ github.repository }}"
+          echo "Wiki updated by: ${{ github.actor }}"
+
+      - name: Create Discussion
+        env:
+          GH_TOKEN: ${{ secrets.Wiki_Discussion }}
+        run: |
+          REPO="${{ github.repository }}"
+          ACTOR="${{ github.actor }}"
+          WIKI_URL="https://github.com/$REPO/wiki"
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          DISCUSSION_TITLE="Wiki Updated by $ACTOR"
+          DISCUSSION_BODY="📖 **Wiki Page Updated**  
+          - **User:** $ACTOR  
+          - **Time:** $TIMESTAMP  
+          - **[View Wiki]($WIKI_URL)**  
+
+          _This discussion was automatically created by GitHub Actions._"
+
+          gh api graphql -F repositoryOwner="${{ github.repository_owner }}" \
+                         -F repositoryName="$(basename $REPO)" \
+                         -F categoryId="$(gh api graphql -F repo="$REPO" -f query='
+                           query($repo: String!) {
+                             repository(owner: "'"${{ github.repository_owner }}"'", name: $repo) {
+                               discussionCategories(first: 10) {
+                                 nodes { id, name }
+                               }
+                             }
+                           }' | jq -r '.data.repository.discussionCategories.nodes[] | select(.name=="General") | .id')" \
+                         -F title="$DISCUSSION_TITLE" \
+                         -F body="$DISCUSSION_BODY" \
+                         -f query='
+                           mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+                             createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
+                               discussion {
+                                 url
+                               }
+                             }
+                           }' | jq -r '.data.createDiscussion.discussion.url'
