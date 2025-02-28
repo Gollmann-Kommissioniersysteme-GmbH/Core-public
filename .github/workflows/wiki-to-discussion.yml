@@ -32,7 +32,7 @@ jobs:
 
           gh api graphql -F repositoryOwner="${{ github.repository_owner }}" \
                          -F repositoryName="$(basename $REPO)" \
-                         -F categoryId="$(gh api graphql -F repo="$REPO" -f query='
+                         -F categoryId="$(gh api graphql -F repo="$(basename $REPO)" -f query='
                            query($repo: String!) {
                              repository(owner: "'"${{ github.repository_owner }}"'", name: $repo) {
                                discussionCategories(first: 10) {
