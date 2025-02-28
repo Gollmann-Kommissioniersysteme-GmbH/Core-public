@@ -8,20 +8,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get Repository Information
+      - name: Extract Repo Information
         run: |
-          echo "Repo: ${{ github.repository }}"
-          echo "Wiki updated by: ${{ github.actor }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO_NAME="$(basename ${{ github.repository }})"
+          echo "Repository: $OWNER/$REPO_NAME"
 
       - name: Create Discussion
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          REPO="${{ github.repository }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO_NAME="$(basename ${{ github.repository }})"
           ACTOR="${{ github.actor }}"
-          WIKI_URL="https://github.com/Gollmann-Kommissioniersysteme-GmbH/Core-public/wiki"
+          WIKI_URL="https://github.com/$OWNER/$REPO_NAME/wiki"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
+          # ✅ Fetch Repository ID (Fix)
+          REPO_ID=$(gh api repos/$OWNER/$REPO_NAME --jq '.id')
+
+          # ✅ Get Discussion Category ID (Default: General)
+          CATEGORY_ID=$(gh api graphql -f query='
+            query {
+              repository(owner: "'"$OWNER"'", name: "'"$REPO_NAME"'") {
+                discussionCategories(first: 10) {
+                  nodes { id, name }
+                }
+              }
+            }' | jq -r '.data.repository.discussionCategories.nodes[] | select(.name=="General") | .id')
+
+          if [[ -z "$CATEGORY_ID" ]]; then
+            echo "Error: No valid discussion category found!"
+            exit 1
+          fi
+
+          # ✅ Create Discussion
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
           DISCUSSION_BODY="📖 **Wiki Page Updated**  
           - **User:** $ACTOR  
@@ -30,23 +51,11 @@ jobs:
 
           _This discussion was automatically created by GitHub Actions._"
 
-          gh api graphql -F repositoryOwner="${{ github.repository_owner }}" \
-                         -F repositoryName="$(basename $REPO)" \
-                         -F categoryId="$(gh api graphql -F repo="$(basename $REPO)" -f query='
-                           query($repo: String!) {
-                             repository(owner: "'"${{ github.repository_owner }}"'", name: $repo) {
-                               discussionCategories(first: 10) {
-                                 nodes { id, name }
-                               }
-                             }
-                           }' | jq -r '.data.repository.discussionCategories.nodes[] | select(.name=="General") | .id')" \
-                         -F title="$DISCUSSION_TITLE" \
-                         -F body="$DISCUSSION_BODY" \
-                         -f query='
-                           mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
-                             createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
-                               discussion {
-                                 url
-                               }
-                             }
-                           }' | jq -r '.data.createDiscussion.discussion.url'
+          gh api graphql -f query='
+            mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+              createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
+                discussion {
+                  url
+                }
+              }
+            }' -F repositoryId="$REPO_ID" -F categoryId="$CATEGORY_ID" -F title="$DISCUSSION_TITLE" -F body="$DISCUSSION_BODY"
