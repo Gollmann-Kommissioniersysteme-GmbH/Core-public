@@ -15,7 +15,7 @@ jobs:
 
       - name: Create Discussion
         env:
-          GH_TOKEN: ${{ secrets.Wiki_Discussion }}
+          GH_TOKEN: ${{ github.Wiki_Discussion }}
         run: |
           REPO="${{ github.repository }}"
           ACTOR="${{ github.actor }}"
