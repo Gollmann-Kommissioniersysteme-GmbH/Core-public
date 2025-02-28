@@ -1,7 +1,7 @@
 name: Wiki Change to Discussion
 
 on:
-  gollum  # This event triggers when the wiki is updated
+  gollum  # Triggers when the wiki is updated
 
 jobs:
   post-discussion:
@@ -14,9 +14,35 @@ jobs:
           REPO_NAME="$(basename ${{ github.repository }})"
           echo "Repository: $OWNER/$REPO_NAME"
 
+      - name: Checkout Wiki Repo
+        run: |
+          git clone --depth=2 https://github.com/${{ github.repository }}.wiki.git wiki
+          cd wiki
+          LAST_COMMIT_SHA=$(git rev-parse HEAD)
+          PREV_COMMIT_SHA=$(git rev-parse HEAD~1)
+
+          echo "Last Commit: $LAST_COMMIT_SHA"
+          echo "Previous Commit: $PREV_COMMIT_SHA"
+
+          # Generate the changes (diff summary)
+          CHANGES=$(git log -1 --pretty=format:"%s%n%n%b" $LAST_COMMIT_SHA)
+          FILE_CHANGES=$(git diff --name-status $PREV_COMMIT_SHA $LAST_COMMIT_SHA)
+
+          echo "Changes: $CHANGES"
+          echo "File Changes: $FILE_CHANGES"
+
+          # Store changes for later steps
+          echo "CHANGES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "FILE_CHANGES<<EOF" >> $GITHUB_ENV
+          echo "$FILE_CHANGES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Create Discussion
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           OWNER="${{ github.repository_owner }}"
           REPO_NAME="$(basename ${{ github.repository }})"
@@ -24,7 +50,7 @@ jobs:
           WIKI_URL="https://github.com/$OWNER/$REPO_NAME/wiki"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-          # ✅ Fetch Correct Global Repository ID
+          # ✅ Fetch Correct Repository Global ID
           REPO_ID=$(gh api graphql -f query='
             query {
               repository(owner: "'"$OWNER"'", name: "'"$REPO_NAME"'") {
@@ -52,12 +78,22 @@ jobs:
             exit 1
           fi
 
-          # ✅ Create Discussion
+          # ✅ Create Discussion with Wiki Changes
           DISCUSSION_TITLE="Wiki Updated by $ACTOR"
           DISCUSSION_BODY="📖 **Wiki Page Updated**  
           - **User:** $ACTOR  
           - **Time:** $TIMESTAMP  
           - **[View Wiki]($WIKI_URL)**  
+
+          ### 🔄 Changes:  
+          \`\`\`
+          $CHANGES
+          \`\`\`
+
+          ### 📄 Files Changed:  
+          \`\`\`
+          $FILE_CHANGES
+          \`\`\`
 
           _This discussion was automatically created by GitHub Actions._"
 
