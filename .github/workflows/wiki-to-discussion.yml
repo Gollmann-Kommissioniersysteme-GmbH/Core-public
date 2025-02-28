@@ -42,7 +42,7 @@ jobs:
 
       - name: Create Discussion
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           OWNER="${{ github.repository_owner }}"
           REPO_NAME="$(basename ${{ github.repository }})"
