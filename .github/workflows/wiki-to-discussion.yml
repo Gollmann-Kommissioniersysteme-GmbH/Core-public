@@ -24,8 +24,18 @@ jobs:
           WIKI_URL="https://github.com/$OWNER/$REPO_NAME/wiki"
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-          # ✅ Fetch Repository ID (Fix)
-          REPO_ID=$(gh api repos/$OWNER/$REPO_NAME --jq '.id')
+          # ✅ Fetch Correct Global Repository ID
+          REPO_ID=$(gh api graphql -f query='
+            query {
+              repository(owner: "'"$OWNER"'", name: "'"$REPO_NAME"'") {
+                id
+              }
+            }' | jq -r '.data.repository.id')
+
+          if [[ -z "$REPO_ID" || "$REPO_ID" == "null" ]]; then
+            echo "Error: Failed to retrieve repository global ID!"
+            exit 1
+          fi
 
           # ✅ Get Discussion Category ID (Default: General)
           CATEGORY_ID=$(gh api graphql -f query='
@@ -37,7 +47,7 @@ jobs:
               }
             }' | jq -r '.data.repository.discussionCategories.nodes[] | select(.name=="General") | .id')
 
-          if [[ -z "$CATEGORY_ID" ]]; then
+          if [[ -z "$CATEGORY_ID" || "$CATEGORY_ID" == "null" ]]; then
             echo "Error: No valid discussion category found!"
             exit 1
           fi
@@ -51,11 +61,18 @@ jobs:
 
           _This discussion was automatically created by GitHub Actions._"
 
-          gh api graphql -f query='
+          DISCUSSION_URL=$(gh api graphql -f query='
             mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
               createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
                 discussion {
                   url
                 }
               }
-            }' -F repositoryId="$REPO_ID" -F categoryId="$CATEGORY_ID" -F title="$DISCUSSION_TITLE" -F body="$DISCUSSION_BODY"
+            }' -F repositoryId="$REPO_ID" -F categoryId="$CATEGORY_ID" -F title="$DISCUSSION_TITLE" -F body="$DISCUSSION_BODY" | jq -r '.data.createDiscussion.discussion.url')
+
+          if [[ -z "$DISCUSSION_URL" || "$DISCUSSION_URL" == "null" ]]; then
+            echo "Error: Failed to create discussion!"
+            exit 1
+          fi
+
+          echo "Discussion created: $DISCUSSION_URL"
